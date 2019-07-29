@@ -265,6 +265,7 @@ void TransformImage_NV12(
     const BYTE* lpBitsY = pSrc;
     const BYTE* lpBitsCb = lpBitsY  + (dwHeightInPixels * srcStride);
     const BYTE* lpBitsCr = lpBitsCb + 1;
+	static const BYTE kAlpha = 255;
 
     for (UINT y = 0; y < dwHeightInPixels; y += 2) {
         const BYTE* lpLineY1 = lpBitsY;
@@ -287,25 +288,25 @@ void TransformImage_NV12(
             lpDibLine1[0] = r.rgbBlue;
             lpDibLine1[1] = r.rgbGreen;
             lpDibLine1[2] = r.rgbRed;
-            lpDibLine1[3] = 0; // Alpha
+            lpDibLine1[3] = kAlpha;
 
             r = ConvertYCrCbToRGB(y1, cr, cb);
             lpDibLine1[4] = r.rgbBlue;
             lpDibLine1[5] = r.rgbGreen;
             lpDibLine1[6] = r.rgbRed;
-            lpDibLine1[7] = 0; // Alpha
+            lpDibLine1[7] = kAlpha;
 
             r = ConvertYCrCbToRGB(y2, cr, cb);
             lpDibLine2[0] = r.rgbBlue;
             lpDibLine2[1] = r.rgbGreen;
             lpDibLine2[2] = r.rgbRed;
-            lpDibLine2[3] = 0; // Alpha
+            lpDibLine2[3] = kAlpha;
 
             r = ConvertYCrCbToRGB(y3, cr, cb);
             lpDibLine2[4] = r.rgbBlue;
             lpDibLine2[5] = r.rgbGreen;
             lpDibLine2[6] = r.rgbRed;
-            lpDibLine2[7] = 0; // Alpha
+            lpDibLine2[7] = kAlpha;
 
             lpLineY1 += 2;
             lpLineY2 += 2;
