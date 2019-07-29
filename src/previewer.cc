@@ -159,7 +159,7 @@ HRESULT Previewer::CheckSupportedMediaType()
     }
 }
 
-HRESULT Previewer::SetDevice(IMFActivate* act, SIZE* frame_size)
+HRESULT Previewer::SetDevice(IMFActivate* act, std::function<void(SIZE)> get_size)
 {
     HRESULT hr = S_OK;
     CloseDevice();
@@ -190,7 +190,7 @@ HRESULT Previewer::SetDevice(IMFActivate* act, SIZE* frame_size)
     hr = CheckSupportedMediaType();
     HR_FAIL_RET(hr);
 
-    *frame_size = draw_.FrameSize();
+	get_size(draw_.FrameSize());
     hr = RequestNextFrame();
 
     if (FAILED(hr))

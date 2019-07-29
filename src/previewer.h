@@ -4,6 +4,7 @@
 #include <dbt.h>  // PDEV_BROADCAST_HDR
 
 #include <mutex>
+#include <functional>
 #include "draw_device.h"
 
 class LayeredWindow;
@@ -29,7 +30,7 @@ public:
         LONGLONG timestamp,
         IMFSample* sample);
 
-    HRESULT SetDevice(IMFActivate* act, SIZE* frame_size);
+    HRESULT SetDevice(IMFActivate* act, std::function<void(SIZE)> get_size);
     void CloseDevice();
     bool IsDeviceLost(PDEV_BROADCAST_HDR hdr);
 

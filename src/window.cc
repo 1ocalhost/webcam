@@ -506,13 +506,14 @@ bool MainWindow::ChooseDevice()
         return false;
 
     UINT device_index = 0;
-    SIZE frame_size = {};
-    hr = previewer_.SetDevice(param.ppDevices[device_index], &frame_size);
+    auto get_size = [this](SIZE size) {
+        layered_win.Reset(m_hWnd, size);
+        SetCenterIn(size, CurScreenRect());
+    };
+
+    hr = previewer_.SetDevice(param.ppDevices[device_index], get_size);
     if (FAILED(hr))
         return false;
-
-    layered_win.Reset(m_hWnd, frame_size);
-    SetCenterIn(frame_size, CurScreenRect());
 
     for (DWORD i = 0; i < param.count; i++)
         param.ppDevices[i]->Release();
