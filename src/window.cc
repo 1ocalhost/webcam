@@ -1,6 +1,5 @@
 #include "window.h"
 #include <mfapi.h>
-#include <mfidl.h>
 #include <ks.h> // KSCATEGORY_CAPTURE
 
 #pragma warning(push)
@@ -10,12 +9,6 @@
 
 #include <sstream>
 #include "util.h"
-
-struct ChooseDeviceParam {
-    IMFActivate** ppDevices;
-    UINT32 count;
-    UINT32 selection;
-};
 
 __forceinline void LayeredWindowCastPixel(RGBQUAD* p, BYTE a)
 {
@@ -32,6 +25,11 @@ __forceinline void LayeredWindowCastPixel(RGBQUAD* p, BYTE a)
 }
 
 MemoryDC::~MemoryDC()
+{
+    Release();
+}
+
+void MemoryDC::Release()
 {
     if (mem_dc_) {
         DeleteDC(mem_dc_);
@@ -125,7 +123,7 @@ void MemoryDC::CreateBitmap(HDC hdc)
     SelectObject(mem_dc_, bitmap_);
 }
 
-void LayeredWindow::Reset(HWND hwnd, SIZE size)
+void LayeredWindow::Create(HWND hwnd, SIZE size)
 {
     content_dc_.Create(hwnd, size);
 
@@ -135,6 +133,22 @@ void LayeredWindow::Reset(HWND hwnd, SIZE size)
 
     bmp_buf_.reset(new RGBQUAD[size.cx * size.cy]);
     bmp_stride_ = size.cx * sizeof(RGBQUAD);
+}
+
+void LayeredWindow::Reset(HWND hwnd, SIZE size)
+{
+    if (!size.cx || !size.cy)
+        return;
+
+    if (size == content_dc_.Size())
+        return;
+
+    content_dc_.Release();
+    scale_x1_dc_.Release();
+    scale_x2_dc_.Release();
+    bmp_buf_.release();
+
+    Create(hwnd, size);
 }
 
 RGBQUAD* LayeredWindow::BmpBuffer()
@@ -198,6 +212,27 @@ void LayeredWindow::SetScale(double v)
     scale_ = v;
 }
 
+void LayeredWindow::ResetWindowPos()
+{
+    reset_win_pos_ = true;
+}
+
+void LayeredWindow::ResetWindowPos(int win_width)
+{
+    if (!reset_win_pos_)
+        return;
+
+    reset_win_pos_ = false;
+
+    HWND hwnd = content_dc_.Window();
+    RECT rect = {};
+    GetWindowRect(hwnd, &rect);
+    const int min_visable_width = 30;
+    if (rect.left + win_width < min_visable_width)
+        SetWindowPos(hwnd, NULL, 0, rect.top, NULL, NULL,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 void LayeredWindow::Update()
 {
     SIZE display_size;
@@ -209,6 +244,7 @@ void LayeredWindow::Update()
         BlendMask(dc, display_size);
 
     dc->UpdateLayered();
+    ResetWindowPos(display_size.cx);
 }
 
 void LayeredWindow::BlendMask(MemoryDC* dc, SIZE display_size)
@@ -337,10 +373,10 @@ bool MainWindow::Init()
         DEVICE_NOTIFY_WINDOW_HANDLE
     );
 
-    if (!previewer_.Init(&layered_win))
+    if (!previewer_.Init(&layered_win_))
         return false;
 
-    return ChooseDevice();
+    return ChooseDevice({});
 }
 
 void MainWindow::CleanUp()
@@ -357,64 +393,14 @@ void MainWindow::CleanUp()
     Gdiplus::GdiplusShutdown(gdip_token_);
 }
 
-LRESULT MainWindow::OnRButtonDown(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled) {
+LRESULT MainWindow::OnRButtonDown(
+    UINT msg, WPARAM wp, LPARAM lp, BOOL& handled) {
     UNUSED(msg);
     UNUSED(wp);
     UNUSED(handled);
 
-    HMENU menu = CreatePopupMenu();
-    HMENU menu_scale = CreatePopupMenu();
-
-    int scale_now = (int)(layered_win.Scale() * 100) + MID_SCALE_BASE;
-    for (int scale_val : {50, 75, 100, 125, 150, 200}) {
-        int scale = scale_val + MID_SCALE_BASE;
-        DWORD state = MF_UNCHECKED;
-
-        if (scale == scale_now)
-            state = MF_CHECKED | MF_DISABLED;
-
-        std::wstringstream ss;
-        ss << scale_val << "%";
-        AppendMenu(menu_scale, state, scale, ss.str().c_str());
-    }
-
-    AppendMenu(menu, MF_POPUP, (UINT_PTR)menu_scale, L"Scale");
-    AppendMenu(menu, MF_SEPARATOR, NULL, NULL);
-    AppendMenu(menu,
-        layered_win.IsMirrorMode() ? MF_CHECKED : MF_UNCHECKED,
-        MID_MIRROR_MODE, L"Mirror Mode");
-    AppendMenu(menu,
-        layered_win.IsMaskMode() ? MF_CHECKED : MF_UNCHECKED,
-        MID_CIRCLE_MODE, L"Circle Mode");
-    AppendMenu(menu, MF_SEPARATOR, NULL, NULL);
-    AppendMenu(menu, MF_STRING, MID_QUIT, L"Quit");
-
-    int x = GET_X_LPARAM(lp);
-    int y = GET_Y_LPARAM(lp);
-    UINT_PTR r = ::TrackPopupMenu(menu, TPM_RETURNCMD, x, y, 0, m_hWnd, NULL);
-    ::DestroyMenu(menu_scale);
-    ::DestroyMenu(menu);
-
-    HandleUserMenu((MenuId)r);
+    ShowMenu(lp);
     return 0;
-}
-
-void MainWindow::HandleUserMenu(MenuId menu)
-{
-    if (MID_MIRROR_MODE == menu) {
-        layered_win.ToggleMirrorMode();
-    }
-    else if (MID_CIRCLE_MODE == menu) {
-        layered_win.ToggleMaskMode();
-    }
-    else if (MID_QUIT == menu) {
-        ShowWindow(SW_HIDE);
-        PostMessage(WM_CLOSE);
-    }
-    else if (menu > MID_SCALE_BASE && menu < MID_SCALE_END) {
-        double scale = (menu - MID_SCALE_BASE) / 100.0;
-        layered_win.SetScale(scale);
-    }
 }
 
 LRESULT MainWindow::OnNcHitTest(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled) {
@@ -480,7 +466,8 @@ int MainWindow::Exec(int show_cmd)
     return (int)msg.wParam;
 }
 
-bool MainWindow::ChooseDevice()
+bool MainWindow::ChooseDevice(
+    std::function<int(const ChooseDeviceParam&)> choose)
 {
     HRESULT hr = S_OK;
     IMFAttributes* attributes = NULL;
@@ -490,7 +477,7 @@ bool MainWindow::ChooseDevice()
 
     SCOPE_EXIT([=]() {
         attributes->Release();
-        });
+    });
 
     // Ask for video capture devices
     hr = attributes->SetGUID(
@@ -501,24 +488,42 @@ bool MainWindow::ChooseDevice()
         return false;
 
     ChooseDeviceParam param = {};
+    param.pre_dev_id = &dev_id_;
     hr = MFEnumDeviceSources(attributes, &param.ppDevices, &param.count);
     if (FAILED(hr) || param.count == 0)
         return false;
 
-    UINT device_index = 0;
-    auto get_size = [this](SIZE size) {
-        layered_win.Reset(m_hWnd, size);
-        SetCenterIn(size, CurScreenRect());
+    SCOPE_EXIT([&]() {
+        for (DWORD i = 0; i < param.count; i++)
+            param.ppDevices[i]->Release();
+
+        CoTaskMemFree(param.ppDevices);
+    });
+
+    int device_id = 0;
+    bool from_init = !choose;
+    if (!from_init)
+        device_id = choose(param);
+
+    auto get_size = [this, from_init](SIZE size) {
+        layered_win_.Reset(m_hWnd, size);
+
+        if (from_init)
+            SetCenterIn(size, CurScreenRect());
     };
 
-    hr = previewer_.SetDevice(param.ppDevices[device_index], get_size);
-    if (FAILED(hr))
-        return false;
+    if (device_id != -1) {
+        IMFActivate* act = param.ppDevices[device_id];
+        if (!act)
+            return false;
 
-    for (DWORD i = 0; i < param.count; i++)
-        param.ppDevices[i]->Release();
+        dev_id_ = GetDevPropStr(act,
+            MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK);
+        hr = previewer_.SetDevice(act, get_size);
+        if (FAILED(hr))
+            return false;
+    }
 
-    CoTaskMemFree(param.ppDevices);
     return true;
 }
 

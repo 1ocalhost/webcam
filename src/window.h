@@ -4,12 +4,20 @@
 #include <atltypes.h>
 
 #include <memory>
+#include <string>
 #include "previewer.h"
+
+struct ChooseDeviceParam {
+    IMFActivate** ppDevices;
+    UINT32 count;
+    std::wstring* pre_dev_id;
+};
 
 class MemoryDC
 {
 public:
     ~MemoryDC();
+    void Release();
     void Create(HWND hwnd, SIZE size);
     SIZE Size();
     RGBQUAD* Data();
@@ -44,9 +52,13 @@ public:
     void ToggleMaskMode();
     double Scale() const;
     void SetScale(double v);
+    void ResetWindowPos();
 
 private:
+    void Create(HWND hwnd, SIZE size);
+
     void Update();
+    void ResetWindowPos(int win_width);
     void BlendMask(MemoryDC* dc, SIZE display_size);
     MemoryDC* SelectDisplayDc(SIZE* display_size);
     BYTE* PrepareMask(SIZE size);
@@ -64,14 +76,7 @@ private:
     bool mask_mode_ = false;
     double scale_ = 1.0;
     double pre_scale_ = scale_;
-};
-
-enum MenuId {
-    MID_SCALE_BASE = 1000,
-    MID_SCALE_END = 2000,
-    MID_MIRROR_MODE = 2001,
-    MID_CIRCLE_MODE = 2002,
-    MID_QUIT = 2003
+    bool reset_win_pos_ = false;
 };
 
 class MainWindow : public CWindowImpl<MainWindow> {
@@ -96,14 +101,15 @@ private:
     LRESULT OnDeviceChange(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled);
     LRESULT OnClose(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled);
 
-    void HandleUserMenu(MenuId menu);
+    void ShowMenu(LPARAM lp);
     static PCWSTR ProgramName();
-    bool ChooseDevice();
+    bool ChooseDevice(std::function<int(const ChooseDeviceParam&)> choose);
     void SetCenterIn(SIZE self_size, const RECT& rect);
     RECT CurScreenRect();
 
     HDEVNOTIFY hdev_notify_ = NULL;
     Previewer previewer_;
-    LayeredWindow layered_win;
+    LayeredWindow layered_win_;
     ULONG_PTR gdip_token_ = NULL;
+    std::wstring dev_id_;
 };

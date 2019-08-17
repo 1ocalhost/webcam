@@ -18,6 +18,8 @@ INT WINAPI wWinMain(
     UNUSED(prev_instance);
     UNUSED(cmd_line);
 
+    SetProcessDPIAware();
+
     MainWindow win;
     if (!win.Init()) {
         win.ErrorMsg(L"Something wrong!");

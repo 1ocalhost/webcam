@@ -1,5 +1,8 @@
 #pragma once
 
+#include <windows.h>
+#include <string>
+
 #define UNUSED(x) (void)x
 
 template <typename F>
@@ -45,4 +48,34 @@ template <class T>
 __forceinline void SafeMulti(T* v, double d)
 {
     *v = (T)((*v) * d);
+}
+
+inline bool operator== (SIZE a, SIZE b)
+{
+    return (a.cx == b.cx) && (a.cy == b.cy);
+}
+
+inline bool IsWindowTopMost(HWND win)
+{
+    LONG_PTR ex_style = GetWindowLongPtr(win, GWL_EXSTYLE);
+    return (ex_style & WS_EX_TOPMOST);
+}
+
+inline void ToggleWindowTopMost(HWND win)
+{
+    bool top_most = IsWindowTopMost(win);
+    HWND after = (top_most ? HWND_NOTOPMOST : HWND_TOPMOST);
+    SetWindowPos(win, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+inline std::wstring GetDevPropStr(IMFActivate* act, const IID id)
+{
+    WCHAR* value = NULL;
+    HRESULT hr = act->GetAllocatedString(id, &value, NULL);
+    if (FAILED(hr))
+        return {};
+
+    std::wstring value_cp = value;
+    CoTaskMemFree(value);
+    return value_cp;
 }
