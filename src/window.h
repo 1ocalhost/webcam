@@ -20,7 +20,7 @@ public:
     const BITMAPINFO* BmpInfo();
     void StretchTo(MemoryDC* dst_dc, SIZE size);
     void Clear();
-    void UpdateLayered();
+    void UpdateLayered(double opacity = 1.0);
 
 private:
     void CreateBitmap(HDC hdc);
@@ -40,13 +40,19 @@ public:
     RGBQUAD* BmpBuffer();
     int BmpStride();
     void OnNewFrame();
+    void ResetWindowPos();
+
     bool IsMirrorMode() const;
     void ToggleMirrorMode();
+
     bool IsMaskMode() const;
     void ToggleMaskMode();
+
     double Scale() const;
     void SetScale(double v);
-    void ResetWindowPos();
+
+    double Opacity() const;
+    void SetOpacity(double v);
 
 private:
     void Create(HWND hwnd, SIZE size);
@@ -71,6 +77,7 @@ private:
     double scale_ = 1.0;
     double pre_scale_ = scale_;
     bool reset_win_pos_ = false;
+    double opacity_ = 1.0;
 };
 
 class MainWindow;

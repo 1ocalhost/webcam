@@ -121,6 +121,20 @@ void MakeScaleMenu(PopupMenu* menu, LayeredWindow* win)
     }
 }
 
+void MakeOpacityMenu(PopupMenu* menu, LayeredWindow* win)
+{
+    menu->SetRadioMode();
+    int opacity_now = (int)(win->Opacity() * 100);
+
+    for (int opacity = 50; opacity <= 100; opacity += 10) {
+        std::wstringstream ss;
+        ss << opacity << "%";
+        menu->Add(ss.str().c_str(), [win, opacity]() {
+            win->SetOpacity(opacity / 100.0);
+        }, opacity == opacity_now);
+    }
+}
+
 int ShowSwitchDeviceMenu(HWND win,
     const DeviceSelector& ds, const std::wstring& pre_uid)
 {
@@ -171,11 +185,10 @@ void MainWindow::ShowMenu(LPARAM lp)
     PopupMenu scale(&menu);
     MakeScaleMenu(&scale, &layered_win_);
     menu.Add(scale, L"Scale");
-    menu.AddSeparator();
 
-    menu.Add(L"Switch Device", [this]() {
-        OnSwitchDevice(this, dev_uid_);
-    });
+    PopupMenu opacity(&menu);
+    MakeOpacityMenu(&opacity, &layered_win_);
+    menu.Add(opacity, L"Opacity");
     menu.AddSeparator();
 
     menu.Add(L"Mirror Mode", [this]() {
@@ -186,6 +199,10 @@ void MainWindow::ShowMenu(LPARAM lp)
         layered_win_.ToggleMaskMode();
     }, layered_win_.IsMaskMode());
     menu.AddSeparator();
+
+    menu.Add(L"Switch Device", [this]() {
+        OnSwitchDevice(this, dev_uid_);
+    });
 
     menu.Add(L"Quit", [this]() {
         ShowWindow(SW_HIDE);

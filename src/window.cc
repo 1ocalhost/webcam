@@ -73,13 +73,17 @@ void MemoryDC::Clear()
     ZeroMemory(Data(), byte_num);
 }
 
-void MemoryDC::UpdateLayered()
+void MemoryDC::UpdateLayered(double opacity)
 {
     if (!hwnd_)
         return;
 
+    BYTE alpha = 0xFF;
+    if (opacity != 1.0)
+        SafeMulti(&alpha, opacity);
+
     POINT pt_src = { 0, 0 };
-    BLENDFUNCTION blend_func = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+    BLENDFUNCTION blend_func = { AC_SRC_OVER, 0, alpha, AC_SRC_ALPHA };
     SIZE size = Size();
     ::UpdateLayeredWindow(hwnd_, NULL, NULL, &size,
         mem_dc_, &pt_src, 0, &blend_func, ULW_ALPHA);
@@ -194,6 +198,16 @@ void LayeredWindow::SetScale(double v)
     scale_ = v;
 }
 
+double LayeredWindow::Opacity() const
+{
+    return opacity_;
+}
+
+void LayeredWindow::SetOpacity(double v)
+{
+    opacity_ = v;
+}
+
 void LayeredWindow::ResetWindowPos()
 {
     reset_win_pos_ = true;
@@ -225,7 +239,7 @@ void LayeredWindow::Update()
     if (mask_mode_)
         BlendMask(dc, display_size);
 
-    dc->UpdateLayered();
+    dc->UpdateLayered(opacity_);
     ResetWindowPos(display_size.cx);
 }
 
