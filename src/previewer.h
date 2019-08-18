@@ -41,6 +41,7 @@ private:
     HRESULT TryMediaType(IMFMediaType* type);
     HRESULT CheckSupportedMediaType();
 
+    LayeredWindow* layered_win_ = nullptr;
     std::mutex mtx_;
     DrawDevice draw_;
     IMFSourceReader* reader_ = NULL;

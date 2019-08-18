@@ -16,7 +16,7 @@ public:
     SIZE Size();
     RGBQUAD* Data();
     HWND Window();
-    HDC Dc();
+    operator HDC();
     const BITMAPINFO* BmpInfo();
     void StretchTo(MemoryDC* dst_dc, SIZE size);
     void Clear();
@@ -41,6 +41,7 @@ public:
     int BmpStride();
     void OnNewFrame();
     void ResetWindowPos();
+    void OnFrameError(HRESULT hr);
 
     bool IsMirrorMode() const;
     void ToggleMirrorMode();

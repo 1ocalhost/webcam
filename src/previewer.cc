@@ -3,6 +3,7 @@
 #include <shlwapi.h>
 #include <mfapi.h>
 
+#include "window.h"
 #include "util.h"
 
 #define HR_FAIL_RET(x) { \
@@ -12,6 +13,7 @@
 
 bool Previewer::Init(LayeredWindow* layered_win)
 {
+    layered_win_ = layered_win;
     draw_.Init(layered_win);
     return true;
 }
@@ -85,9 +87,10 @@ HRESULT Previewer::OnReadSample(
             if (SUCCEEDED(hr))
                 hr = draw_.DrawFrame(buffer);
         }
+    } else {
+        layered_win_->OnFrameError(hr);
     }
 
-    // Request the next frame.
     if (SUCCEEDED(hr))
         hr = RequestNextFrame();
 

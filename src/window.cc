@@ -1,5 +1,6 @@
 #include "window.h"
 #include <mfapi.h>
+#include <mferror.h>
 #include <ks.h> // KSCATEGORY_CAPTURE
 
 #pragma warning(push)
@@ -51,7 +52,7 @@ HWND MemoryDC::Window()
     return hwnd_;
 }
 
-HDC MemoryDC::Dc()
+MemoryDC::operator HDC()
 {
     return mem_dc_;
 }
@@ -63,7 +64,7 @@ const BITMAPINFO* MemoryDC::BmpInfo()
 
 void MemoryDC::StretchTo(MemoryDC* dst_dc, SIZE size)
 {
-    StretchDIBits(dst_dc->Dc(), 0, 0, size.cx, size.cy,
+    StretchDIBits(*dst_dc, 0, 0, size.cx, size.cy,
         0, 0, Size().cx, Size().cy, Data(), BmpInfo(), DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -164,6 +165,35 @@ void LayeredWindow::OnNewFrame()
         src += size.cx;
         dst -= size.cx;
     }
+
+    Update();
+}
+
+void LayeredWindow::OnFrameError(HRESULT hr)
+{
+    std::wstring msg;
+    if (hr == MF_E_HW_MFT_FAILED_START_STREAMING) {
+        msg = L"Another app is using the camera already.";
+    }
+    else {
+        std::wstringstream ss;
+        ss << "Error: 0x" << std::uppercase << std::hex << hr;
+        msg = ss.str();
+    }
+
+    using namespace Gdiplus;
+    SIZE size = content_dc_.Size();
+    content_dc_.Clear();
+    Graphics graph((HDC)content_dc_);
+
+    LinearGradientBrush bg_brush(Rect(0, 0, size.cx * 2, size.cy),
+        Color(255, 0, 212, 255), Color(255, 0, 25, 29),
+        LinearGradientModeBackwardDiagonal);
+    graph.FillRectangle(&bg_brush, 0, 0, size.cx, size.cy);
+
+    Font font(&FontFamily(L"Arial"), 12);
+    SolidBrush text_brush(Color(200, 255, 255, 255));
+    graph.DrawString(msg.c_str(), -1, &font, PointF(10, 10), &text_brush);
 
     Update();
 }
@@ -310,7 +340,7 @@ BYTE* LayeredWindow::PrepareMask(SIZE size)
 
     MemoryDC mask_dc;
     mask_dc.Create(content_dc_.Window(), size);
-    Graphics graph(mask_dc.Dc());
+    Graphics graph((HDC)mask_dc);
     SolidBrush brush(Color(255, 0, 0, 0));
     graph.SetSmoothingMode(SmoothingMode::SmoothingModeAntiAlias);
     graph.FillEllipse(&brush, ox - radius, 0, ellipse_size, ellipse_size);
