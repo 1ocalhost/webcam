@@ -448,6 +448,59 @@ MainWindow::~MainWindow()
     DestroyWindow();
 }
 
+void PutPreInstanceToForeground(LONG_PTR magic_token)
+{
+    HWND pre_win = NULL;
+    WindowFinder().Find([magic_token, &pre_win](HWND win) {
+        if (!IsWindowVisible(win))
+            return true;
+
+        WCHAR title[1024];
+        GetWindowText(win, title, _countof(title));
+
+        if (Equals(title, MainWindow::ProgramName())) {
+            LONG_PTR token = GetWindowLongPtr(win, GWLP_USERDATA);
+            if (token == magic_token) {
+                pre_win = win;
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    if (pre_win)
+        SetForegroundWindow(pre_win);
+}
+
+bool MainWindow::CreateMainWindow(std::wstring* msg)
+{
+    RECT win_rect;
+    win_rect.left = 0;
+    win_rect.top = 0;
+    win_rect.right = 100;
+    win_rect.bottom = 100;
+
+    Create(NULL, win_rect, ProgramName(),
+        WS_POPUP, WS_EX_LAYERED | WS_EX_TOPMOST);
+
+    if (!m_hWnd)
+        return false;
+
+    LONG_PTR magic_token = 0x6D6D6A73;
+    SetWindowLongPtr(GWLP_USERDATA, magic_token);
+
+    PCWSTR app_uid = L"webcam-viewer.mm.js.org";
+    HANDLE mutex = CreateMutex(NULL, TRUE, app_uid);
+    if (!mutex || GetLastError() == ERROR_ALREADY_EXISTS) {
+        PutPreInstanceToForeground(magic_token);
+        msg->clear();
+        return false;
+    }
+
+    return true;
+}
+
 bool MainWindow::Init(std::wstring* msg)
 {
     Gdiplus::GdiplusStartupInput gdip_input;
@@ -462,15 +515,7 @@ bool MainWindow::Init(std::wstring* msg)
     if (FAILED(hr))
         return false;
 
-    RECT win_rect;
-    win_rect.left = 0;
-    win_rect.top = 0;
-    win_rect.right = 100;
-    win_rect.bottom = 100;
-
-    Create(NULL, win_rect, ProgramName(), WS_POPUP, WS_EX_LAYERED | WS_EX_TOPMOST);
-
-    if (!m_hWnd)
+    if (!CreateMainWindow(msg))
         return false;
 
     DEV_BROADCAST_DEVICEINTERFACE di = { 0 };
@@ -478,9 +523,7 @@ bool MainWindow::Init(std::wstring* msg)
     di.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
     di.dbcc_classguid = KSCATEGORY_CAPTURE;
     hdev_notify_ = RegisterDeviceNotification(
-        m_hWnd,
-        &di,
-        DEVICE_NOTIFY_WINDOW_HANDLE
+        m_hWnd, &di, DEVICE_NOTIFY_WINDOW_HANDLE
     );
 
     if (!previewer_.Init(&layered_win_))

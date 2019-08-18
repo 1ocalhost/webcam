@@ -109,6 +109,8 @@ public:
         MESSAGE_HANDLER(WM_CLOSE, OnClose)
     END_MSG_MAP()
 
+    static PCWSTR ProgramName();
+
     ~MainWindow();
     bool Init(std::wstring* msg);
     int Exec(int show_cmd);
@@ -124,8 +126,8 @@ private:
     LRESULT OnDeviceChange(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled);
     LRESULT OnClose(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled);
 
+    bool CreateMainWindow(std::wstring* msg);
     void ShowMenu(LPARAM lp);
-    static PCWSTR ProgramName();
     void SetCenterIn(SIZE self_size, const RECT& rect);
     RECT CurScreenRect();
 

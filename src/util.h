@@ -79,3 +79,27 @@ inline std::wstring GetDevPropStr(IMFActivate* act, const IID id)
     CoTaskMemFree(value);
     return value_cp;
 }
+
+inline bool Equals(const wchar_t* s1, const wchar_t* s2)
+{
+    return 0 == wcscmp(s1, s2);
+}
+
+class WindowFinder {
+public:
+    typedef std::function<bool(HWND)> Handler;
+
+    void Find(Handler handler)
+    {
+        handler_ = handler;
+        EnumWindows(HandlerProc, (LPARAM)this);
+    }
+
+private:
+    static BOOL CALLBACK HandlerProc(HWND win, LPARAM param)
+    {
+        return ((WindowFinder*)param)->handler_(win) ? TRUE : FALSE;
+    }
+
+    std::function<bool(HWND)> handler_;
+};

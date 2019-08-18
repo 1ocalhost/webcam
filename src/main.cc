@@ -23,7 +23,9 @@ INT WINAPI wWinMain(
     MainWindow win;
     std::wstring msg(L"Something wrong!");
     if (!win.Init(&msg)) {
-        win.ErrorMsg(msg.c_str());
+        if (msg.size())
+            win.ErrorMsg(msg.c_str());
+
         return -1;
     }
 
