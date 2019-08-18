@@ -21,8 +21,9 @@ INT WINAPI wWinMain(
     SetProcessDPIAware();
 
     MainWindow win;
-    if (!win.Init()) {
-        win.ErrorMsg(L"Something wrong!");
+    std::wstring msg(L"Something wrong!");
+    if (!win.Init(&msg)) {
+        win.ErrorMsg(msg.c_str());
         return -1;
     }
 

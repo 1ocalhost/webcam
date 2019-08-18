@@ -7,12 +7,6 @@
 #include <string>
 #include "previewer.h"
 
-struct ChooseDeviceParam {
-    IMFActivate** ppDevices;
-    UINT32 count;
-    std::wstring* pre_dev_id;
-};
-
 class MemoryDC
 {
 public:
@@ -79,6 +73,25 @@ private:
     bool reset_win_pos_ = false;
 };
 
+class MainWindow;
+class DeviceSelector {
+public:
+    DeviceSelector(MainWindow* win);
+    ~DeviceSelector();
+    bool List();
+    bool Select(int dev_id, std::function<void(SIZE)> get_size);
+    UINT32 DevNum() const;
+    IMFActivate* operator[](int n) const;
+
+private:
+    DeviceSelector(const DeviceSelector&) = delete;
+
+    MainWindow* win_ = nullptr;
+    IMFAttributes* attr_ = nullptr;
+    IMFActivate** devices_ = nullptr;
+    UINT32 dev_num_ = 0;
+};
+
 class MainWindow : public CWindowImpl<MainWindow> {
 public:
     BEGIN_MSG_MAP(MainWindow)
@@ -89,11 +102,13 @@ public:
     END_MSG_MAP()
 
     ~MainWindow();
-    bool Init();
+    bool Init(std::wstring* msg);
     int Exec(int show_cmd);
     void CleanUp();
     void ErrorMsg(PCWSTR msg);
     void InfoMsg(PCWSTR msg);
+
+    bool SelectDevice(IMFActivate* act, std::function<void(SIZE)> get_size);
 
 private:
     LRESULT OnRButtonDown(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled);
@@ -103,7 +118,6 @@ private:
 
     void ShowMenu(LPARAM lp);
     static PCWSTR ProgramName();
-    bool ChooseDevice(std::function<int(const ChooseDeviceParam&)> choose);
     void SetCenterIn(SIZE self_size, const RECT& rect);
     RECT CurScreenRect();
 
@@ -111,5 +125,5 @@ private:
     Previewer previewer_;
     LayeredWindow layered_win_;
     ULONG_PTR gdip_token_ = NULL;
-    std::wstring dev_id_;
+    std::wstring dev_uid_;
 };

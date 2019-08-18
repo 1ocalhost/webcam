@@ -24,24 +24,6 @@ __forceinline void LayeredWindowCastPixel(RGBQUAD* p, BYTE a)
     SafeMulti(&p->rgbBlue, ratio);
 }
 
-MemoryDC::~MemoryDC()
-{
-    Release();
-}
-
-void MemoryDC::Release()
-{
-    if (mem_dc_) {
-        DeleteDC(mem_dc_);
-        mem_dc_ = NULL;
-    }
-
-    if (bitmap_) {
-        DeleteObject(bitmap_);
-        bitmap_ = NULL;
-    }
-}
-
 void MemoryDC::Create(HWND hwnd, SIZE size)
 {
     hwnd_ = hwnd;
@@ -333,12 +315,96 @@ BYTE* LayeredWindow::PrepareMask(SIZE size)
     return mask_data_.get();
 }
 
+DeviceSelector::DeviceSelector(MainWindow* win)
+{
+    win_ = win;
+}
+
+bool DeviceSelector::List()
+{
+    HRESULT hr = S_OK;
+    hr = MFCreateAttributes(&attr_, 1);
+    if (FAILED(hr)) {
+        attr_ = nullptr;
+        return false;
+    }
+
+    hr = attr_->SetGUID(
+        MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
+        MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+
+    if (FAILED(hr))
+        return false;
+
+    hr = MFEnumDeviceSources(attr_, &devices_, &dev_num_);
+    if (FAILED(hr)) {
+        devices_ = nullptr;
+        dev_num_ = 0;
+        return false;
+    }
+
+    return true;
+}
+
+bool DeviceSelector::Select(int dev_id, std::function<void(SIZE)> get_size)
+{
+    IMFActivate* act = devices_[dev_id];
+    if (!act)
+        return false;
+
+    return win_->SelectDevice(act, get_size);
+}
+
+UINT32 DeviceSelector::DevNum() const
+{
+    return dev_num_;
+}
+
+IMFActivate* DeviceSelector::operator[](int n) const
+{
+    return devices_[n];
+}
+
+DeviceSelector::~DeviceSelector()
+{
+    if (devices_) {
+        for (DWORD i = 0; i < dev_num_; i++)
+            devices_[i]->Release();
+
+        CoTaskMemFree(devices_);
+        devices_ = nullptr;
+    }
+
+    if (attr_) {
+        attr_->Release();
+        attr_ = nullptr;
+    }
+}
+
+MemoryDC::~MemoryDC()
+{
+    Release();
+}
+
+void MemoryDC::Release()
+{
+    if (mem_dc_) {
+        DeleteDC(mem_dc_);
+        mem_dc_ = NULL;
+    }
+
+    if (bitmap_) {
+        DeleteObject(bitmap_);
+        bitmap_ = NULL;
+    }
+}
+
 MainWindow::~MainWindow()
 {
     DestroyWindow();
 }
 
-bool MainWindow::Init()
+bool MainWindow::Init(std::wstring* msg)
 {
     Gdiplus::GdiplusStartupInput gdip_input;
     Gdiplus::GdiplusStartup(&gdip_token_, &gdip_input, NULL);
@@ -376,7 +442,18 @@ bool MainWindow::Init()
     if (!previewer_.Init(&layered_win_))
         return false;
 
-    return ChooseDevice({});
+    DeviceSelector dev(this);
+    if (!dev.List())
+        return false;
+
+    if (!dev.DevNum()) {
+        *msg = L"No camera fonud!";
+        return false;
+    }
+
+    return dev.Select(0, [this](SIZE size) {
+        SetCenterIn(size, CurScreenRect());
+    });
 }
 
 void MainWindow::CleanUp()
@@ -466,63 +543,21 @@ int MainWindow::Exec(int show_cmd)
     return (int)msg.wParam;
 }
 
-bool MainWindow::ChooseDevice(
-    std::function<int(const ChooseDeviceParam&)> choose)
+bool MainWindow::SelectDevice(IMFActivate* act, std::function<void(SIZE)> get_size)
 {
-    HRESULT hr = S_OK;
-    IMFAttributes* attributes = NULL;
-    hr = MFCreateAttributes(&attributes, 1);
-    if (FAILED(hr))
-        return false;
+    dev_uid_ = GetDevPropStr(act,
+        MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK);
 
-    SCOPE_EXIT([=]() {
-        attributes->Release();
-    });
-
-    // Ask for video capture devices
-    hr = attributes->SetGUID(
-        MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
-        MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-
-    if (FAILED(hr))
-        return false;
-
-    ChooseDeviceParam param = {};
-    param.pre_dev_id = &dev_id_;
-    hr = MFEnumDeviceSources(attributes, &param.ppDevices, &param.count);
-    if (FAILED(hr) || param.count == 0)
-        return false;
-
-    SCOPE_EXIT([&]() {
-        for (DWORD i = 0; i < param.count; i++)
-            param.ppDevices[i]->Release();
-
-        CoTaskMemFree(param.ppDevices);
-    });
-
-    int device_id = 0;
-    bool from_init = !choose;
-    if (!from_init)
-        device_id = choose(param);
-
-    auto get_size = [this, from_init](SIZE size) {
+    HRESULT hr = previewer_.SetDevice(act,
+        [this, get_size](SIZE size) {
         layered_win_.Reset(m_hWnd, size);
 
-        if (from_init)
-            SetCenterIn(size, CurScreenRect());
-    };
+        if (get_size)
+            get_size(size);
+    });
 
-    if (device_id != -1) {
-        IMFActivate* act = param.ppDevices[device_id];
-        if (!act)
-            return false;
-
-        dev_id_ = GetDevPropStr(act,
-            MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK);
-        hr = previewer_.SetDevice(act, get_size);
-        if (FAILED(hr))
-            return false;
-    }
+    if (FAILED(hr))
+        return false;
 
     return true;
 }

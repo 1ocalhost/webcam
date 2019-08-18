@@ -121,14 +121,15 @@ void MakeScaleMenu(PopupMenu* menu, LayeredWindow* win)
     }
 }
 
-int ShowSwitchDeviceMenu(HWND win, const ChooseDeviceParam& param)
+int ShowSwitchDeviceMenu(HWND win,
+    const DeviceSelector& ds, const std::wstring& pre_uid)
 {
     int selection = -1;
     PopupMenu menu(win);
     menu.SetRadioMode();
 
-    for (DWORD i = 0; i < param.count; ++i) {
-        IMFActivate* act = param.ppDevices[i];
+    for (DWORD i = 0; i < ds.DevNum(); ++i) {
+        IMFActivate* act = ds[i];
         std::wstring friendly_name = GetDevPropStr(act,
             MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME);
 
@@ -139,11 +140,24 @@ int ShowSwitchDeviceMenu(HWND win, const ChooseDeviceParam& param)
             MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK);
 
         menu.Add(friendly_name.c_str(), [&, i]() { selection = i; },
-            (param.pre_dev_id->size() && dev_id == *param.pre_dev_id));
+            (pre_uid.size() && dev_id == pre_uid));
     }
 
     menu.Show();
     return selection;
+}
+
+void OnSwitchDevice(MainWindow* win, const std::wstring& dev_uid)
+{
+    DeviceSelector dev(win);
+    if (!dev.List() || !dev.DevNum())
+        return;
+
+    int select = ShowSwitchDeviceMenu(*win, dev, dev_uid);
+    if (select == -1)
+        return;
+
+    dev.Select(select, {});
 }
 
 void MainWindow::ShowMenu(LPARAM lp)
@@ -160,9 +174,7 @@ void MainWindow::ShowMenu(LPARAM lp)
     menu.AddSeparator();
 
     menu.Add(L"Switch Device", [this]() {
-        ChooseDevice([this](const ChooseDeviceParam& param) {
-            return ShowSwitchDeviceMenu(m_hWnd, param);
-        });
+        OnSwitchDevice(this, dev_uid_);
     });
     menu.AddSeparator();
 
